@@ -452,6 +452,11 @@ namespace cppdecl
         if (token == "::") return "scope";
         if (token == ".") return "dot";
         if (token == ".*") return "dot_star";
+        // Keyword-operators:
+        if (token == "new") return "new";
+        if (token == "delete") return "delete";
+        if (token == "new[]") return "new_array";
+        if (token == "delete[]") return "delete_array";
 
         if (assert_and_fallback_if_unknown)
         {
