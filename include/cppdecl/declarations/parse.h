@@ -1582,17 +1582,36 @@ namespace cppdecl
             }
 
             { // Template argument list.
-                auto arglist_result = ParseTemplateArgumentList(input);
-                if (auto error = std::get_if<ParseError>(&arglist_result))
-                    return ret = *error, ret;
-                auto &arglist_opt = std::get<std::optional<TemplateArgumentList>>(arglist_result);
-                if (arglist_opt)
-                {
-                    ret_expr.tokens.emplace_back(std::move(*arglist_opt));
-                    continue;
-                }
+                // Only attempt to parse a template argument list if the preceding token looks like
+                // the end of a template-name (identifier/type), not a numeric literal or punctuation.
+                // When the last token is a NumericLiteral (e.g. `2U < 2U ? ...`), the `<` is a
+                // comparison operator and calling ParseTemplateArgumentList would greedily consume
+                // the `>` that belongs to the outer template argument list.
+                bool last_token_can_precede_template_args =
+                    ret_expr.tokens.empty() ||
+                    std::holds_alternative<SimpleType>(ret_expr.tokens.back()) ||
+                    std::holds_alternative<TemplateArgumentList>(ret_expr.tokens.back());
 
-                // If we're here, this means there was no `<` at all, so we continue.
+                if (last_token_can_precede_template_args)
+                {
+                    std::string_view input_before_lt = input;
+                    auto arglist_result = ParseTemplateArgumentList(input);
+                    if (std::get_if<ParseError>(&arglist_result))
+                    {
+                        input = input_before_lt; // Backtrack; treat `<` as a plain punctuation token.
+                        // Fall through to the punctuation handler below.
+                    }
+                    else
+                    {
+                        auto &arglist_opt = std::get<std::optional<TemplateArgumentList>>(arglist_result);
+                        if (arglist_opt)
+                        {
+                            ret_expr.tokens.emplace_back(std::move(*arglist_opt));
+                            continue;
+                        }
+                        // If we're here, this means there was no `<` at all, so we continue.
+                    }
+                }
             }
 
             { // `SimpleType`, which includes identifiers.
